@@ -1,8 +1,26 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Providers } from "./provider";
+import { Manrope } from "next/font/google";
+import { cn } from "@/lib/utils";
+import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin"] });
+const fontHeading = Manrope({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-heading",
+});
+
+const fontBody = Manrope({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-body",
+});
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -16,7 +34,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body
+        className={cn("antialiased", fontHeading.variable, fontBody.variable)}
+      >
+        <Providers>
+          <Toaster position="bottom-right" />
+          <Navbar />
+          {children}
+          <Footer />
+        </Providers>
+      </body>
     </html>
   );
 }
