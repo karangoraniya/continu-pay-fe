@@ -46,6 +46,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
+          coolMode
           theme={darkTheme({
             accentColor: "#7075b8",
             accentColorForeground: "white",
@@ -53,7 +54,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
             fontStack: "system",
             overlayBlur: "small",
           })}
-          coolMode
         >
           {mounted && children}
         </RainbowKitProvider>
