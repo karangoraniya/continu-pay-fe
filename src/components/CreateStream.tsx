@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, HelpCircle, Upload, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw, Loader2 } from "lucide-react";
 import { format, fromUnixTime, getUnixTime, set } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -29,23 +29,24 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { useWriteContract } from "wagmi";
+import { useAccount, useWriteContract } from "wagmi";
 import {
   continuPayAbi,
   contractAddress,
+  usdABI,
   USDCAddress,
   USDTAddress,
 } from "@/utils/helpers";
-import { parseEther } from "viem";
+import { parseEther, parseUnits } from "viem";
 import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function CreateNewStream() {
   const [streamType, setStreamType] = useState("eth");
   const [token, setToken] = useState("ETH");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  //   const [startDate, setStartDate] = useState<Date>();
-  //   const [endDate, setEndDate] = useState<Date>();
   const [streamName, setStreamName] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState<File | null>(null);
@@ -53,8 +54,14 @@ export default function CreateNewStream() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrencePeriod, setRecurrencePeriod] = useState("");
   const [startDate, setStartDate] = useState<number>(); // Unix timestamp
-  const [endDate, setEndDate] = useState<number>(); // Unix timestam
+  const [endDate, setEndDate] = useState<number>(); // Unix timestamp
+  const router = useRouter();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isApproved, setIsApproved] = useState(false);
 
+  const { isConnected } = useAccount();
   const {
     data: hash,
     error,
@@ -62,30 +69,78 @@ export default function CreateNewStream() {
     isError,
     writeContract,
   } = useWriteContract();
-  useEffect(() => {
-    if (image) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(image);
-    } else {
-      setImagePreview(null);
-    }
-  }, [image]);
+
+  // cross
 
   useEffect(() => {
-    if (hash) {
-      toast.success("Transaction successful!");
-      window.open(
-        `https://opencampus-codex.blockscout.com/tx/${hash}`,
-        "_blank"
-      );
+    if (isConnected && !isRedirecting) {
+      setIsRedirecting(true);
+      const timer = setTimeout(() => {
+        router.push("/dashboard");
+      }, 3000); // 3-second delay before redirect
+      return () => clearTimeout(timer);
     }
-  }, [hash]);
+  }, [isConnected, router, isRedirecting]);
+
+  useEffect(() => {
+    if (isError) {
+      toast.error("Transaction failed. Please try again.");
+      setIsLoading(false);
+      setIsApproving(false);
+    }
+  }, [isError]);
+
+  const handleGetStarted = () => {
+    if (isConnected) {
+      router.push("/dashboard");
+    } else {
+      toast.error("Please connect wallet to see dashboard");
+    }
+  };
+
+  const cancelRedirect = () => {
+    setIsRedirecting(false);
+  };
+
+  useEffect(() => {
+    if (hash && !isApproving) {
+      const explorerUrl = `https://opencampus-codex.blockscout.com/tx/${hash}`;
+      toast(
+        (t) => (
+          <span>
+            Transaction successful!
+            <br />
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:underline"
+            >
+              View on Explorer
+            </a>
+          </span>
+        ),
+        {
+          duration: 5000,
+        }
+      );
+      setIsLoading(false);
+      // Redirect to dashboard after 3 seconds
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 3000);
+    } else if (hash && isApproving) {
+      toast.success("Token approval successful. Creating stream...");
+      setIsApproving(false);
+      setIsApproved(true);
+      triggerTokenTx();
+    }
+  }, [hash, router, isApproving]);
 
   const triggerEthTx = async () => {
     try {
+      setIsLoading(true);
+      const recurringPeriodValue = isRecurring ? parseInt(recurrencePeriod) : 0;
       const triggerTx = writeContract({
         abi: continuPayAbi,
         address: contractAddress,
@@ -98,56 +153,78 @@ export default function CreateNewStream() {
           startDate,
           endDate,
           isRecurring,
-          0,
-          //   recurrencePeriod,
+          recurringPeriodValue,
         ],
         value: parseEther(amount),
       });
-      console.log("hash", hash);
+      // console.log("hash", hash);
     } catch (error) {
       console.log("error", error);
+      setIsLoading(false);
     }
   };
-  console.log("isError", isError);
-  console.log("error", error);
+
+  const triggerApprove = async () => {
+    try {
+      setIsApproving(true);
+      setIsLoading(true);
+      const tokenAddress = token === "USDT" ? USDTAddress : USDCAddress;
+      const amountInSmallestUnit = parseUnits(amount, 18);
+
+      await writeContract({
+        abi: usdABI,
+        address: tokenAddress,
+        functionName: "approve",
+        args: [contractAddress, amountInSmallestUnit],
+      });
+    } catch (error) {
+      console.error("Error approving tokens:", error);
+      setIsApproving(false);
+      setIsLoading(false);
+      toast.error("Failed to approve tokens. Please try again.");
+    }
+  };
 
   const triggerTokenTx = async () => {
-    const tokenAddress = token === "USDT" ? USDTAddress : USDCAddress;
-    const triggerTx = writeContract({
-      abi: continuPayAbi,
-      address: contractAddress,
-      functionName: "createTokenStream",
-      args: [
-        streamName,
-        description,
-        "image",
-        tokenAddress,
-        recipient,
-        startDate,
-        endDate,
-        isRecurring,
-        0,
-        // recurrencePeriod,
-        // parseEther(amount),
-      ],
-      value: parseEther(amount),
-    });
-  };
-  console.log(streamName);
-  console.log(description);
-  console.log(startDate);
-  console.log(endDate);
-  console.log(recipient);
-  console.log(recurrencePeriod);
-  console.log(isRecurring);
+    try {
+      setIsLoading(true);
+      const tokenAddress = token === "USDT" ? USDTAddress : USDCAddress;
+      const amountInSmallestUnit = parseUnits(amount, 18);
+      const recurringPeriodValue = isRecurring ? parseInt(recurrencePeriod) : 0;
 
-  const handleCreateStream = () => {
-    console.log("1", 1);
+      await writeContract({
+        abi: continuPayAbi,
+        address: contractAddress,
+        functionName: "createErc20Stream",
+        args: [
+          streamName,
+          description,
+          "image",
+          tokenAddress,
+          recipient,
+          amountInSmallestUnit,
+          startDate,
+          endDate,
+          isRecurring,
+          recurringPeriodValue,
+        ],
+      });
+    } catch (error) {
+      console.error("Error creating ERC20 stream:", error);
+      setIsLoading(false);
+      toast.error("Failed to create ERC20 stream. Please try again.");
+    }
+  };
+
+  const handleCreateStream = async () => {
     if (streamType === "eth") {
-      console.log("streamType", streamType);
-      triggerEthTx();
+      await triggerEthTx();
     } else {
-      triggerTokenTx();
+      if (!isApproved) {
+        await triggerApprove();
+      } else {
+        await triggerTokenTx();
+      }
     }
   };
 
@@ -187,32 +264,43 @@ export default function CreateNewStream() {
 
   const calculateStreamDetails = () => {
     if (startDate && endDate && amount) {
-      const duration = endDate - startDate; // in seconds
-      const ratePerSecond = parseFloat(amount) / duration;
-      const ratePerDay = ratePerSecond * 86400; // 86400 seconds in a day
+      const durationInSeconds = endDate - startDate;
+      const durationInDays = durationInSeconds / 86400; // 86400 seconds in a day
+      const ratePerSecond = parseFloat(amount) / durationInSeconds;
+      const ratePerDay = ratePerSecond * 86400;
+
+      const formatDuration = () => {
+        if (durationInDays >= 1) {
+          return `${durationInDays.toFixed(2)} days`;
+        } else {
+          const hours = durationInSeconds / 3600;
+          if (hours >= 1) {
+            return `${hours.toFixed(2)} hours`;
+          } else {
+            const minutes = durationInSeconds / 60;
+            return `${minutes.toFixed(2)} minutes`;
+          }
+        }
+      };
+
+      const formatRate = (rate: number) => {
+        if (rate < 0.000001) {
+          return rate.toExponential(6);
+        } else {
+          return rate.toFixed(6);
+        }
+      };
 
       return {
-        duration: `${Math.floor(duration / 86400)} days`,
-        ratePerSecond: `${ratePerSecond.toFixed(8)} ${token}/second`,
-        ratePerDay: `${ratePerDay.toFixed(4)} ${token}/day`,
+        duration: formatDuration(),
+        ratePerSecond: `${formatRate(ratePerSecond)} ${token}/second`,
+        ratePerMinute: `${formatRate(ratePerSecond * 60)} ${token}/minute`,
+        ratePerHour: `${formatRate(ratePerSecond * 3600)} ${token}/hour`,
+        ratePerDay: `${formatRate(ratePerDay)} ${token}/day`,
       };
     }
     return null;
   };
-  //   const calculateStreamDetails = () => {
-  //     if (startDate && endDate && amount) {
-  //       const duration = (endDate.getTime() - startDate.getTime()) / 1000; // in seconds
-  //       const ratePerSecond = parseFloat(amount) / duration;
-  //       const ratePerDay = ratePerSecond * 86400; // 86400 seconds in a day
-
-  //       return {
-  //         duration: `${Math.floor(duration / 86400)} days`,
-  //         ratePerSecond: `${ratePerSecond.toFixed(8)} ${token}/second`,
-  //         ratePerDay: `${ratePerDay.toFixed(4)} ${token}/day`,
-  //       };
-  //     }
-  //     return null;
-  //   };
 
   const streamDetails = calculateStreamDetails();
 
@@ -221,7 +309,7 @@ export default function CreateNewStream() {
       <Button
         variant="ghost"
         className="mb-4"
-        onClick={() => console.log("Back to Dashboard")}
+        onClick={() => router.push("/dashboard")}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Dashboard
@@ -288,64 +376,6 @@ export default function CreateNewStream() {
               </div>
             </div>
 
-            {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start-date">Start Date and Time</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !startDate && "text-muted-foreground"
-                      )}
-                    >
-                      {startDate ? (
-                        format(startDate, "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-date">End Date and Time</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !endDate && "text-muted-foreground"
-                      )}
-                    >
-                      {endDate ? (
-                        format(endDate, "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div> */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start-date">Start Date and Time</Label>
@@ -447,7 +477,7 @@ export default function CreateNewStream() {
               />
             </div>
 
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label htmlFor="image-upload">Upload Image</Label>
               <Input
                 id="image-upload"
@@ -464,7 +494,7 @@ export default function CreateNewStream() {
                   className="mt-2 max-w-xs rounded-md"
                 />
               )}
-            </div>
+            </div> */}
 
             <div className="space-y-2">
               <Button
@@ -494,6 +524,8 @@ export default function CreateNewStream() {
                   <div className="space-y-2">
                     <p>Duration: {streamDetails.duration}</p>
                     <p>Rate per Second: {streamDetails.ratePerSecond}</p>
+                    <p>Rate per Minute: {streamDetails.ratePerMinute}</p>
+                    <p>Rate per Hour: {streamDetails.ratePerHour}</p>
                     <p>Rate per Day: {streamDetails.ratePerDay}</p>
                   </div>
                 </CardContent>
@@ -502,8 +534,21 @@ export default function CreateNewStream() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button className="w-full" onClick={handleCreateStream}>
-            Create Stream
+          <Button
+            className="w-full"
+            onClick={handleCreateStream}
+            disabled={isLoading || isPending}
+          >
+            {isLoading || isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {isApproving ? "Approving..." : "Creating Stream..."}
+              </>
+            ) : streamType === "eth" || isApproved ? (
+              "Create Stream"
+            ) : (
+              "Approve and Create Stream"
+            )}
           </Button>
         </CardFooter>
       </Card>
