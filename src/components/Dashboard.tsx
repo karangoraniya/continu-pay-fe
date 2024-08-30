@@ -1,14 +1,9 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import {
   Table,
   TableBody,
@@ -19,21 +14,88 @@ import {
 } from "@/components/ui/table";
 import {
   CreditCard,
-  Bell,
   Settings,
-  LogOut,
   Eye,
-  Wallet,
   ArrowDownLeft,
   Calendar,
   DollarSign,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAccount, useReadContracts } from "wagmi";
+import {
+  continuPayAbi,
+  contractAddress,
+  USDCAddress,
+  USDTAddress,
+} from "@/utils/helpers";
+import { formatEther, formatUnits } from "viem";
+
+// Assuming you have a list of token addresses that are used in your streams
+const TOKEN_ADDRESSES = [
+  "0xD18230c420f78B4Cb71Ba87fdd7129A8E34730D7", // Example ERC20 token address
+  // Add more token addresses as needed
+];
+
+const lootContract = {
+  address: "0xD18230c420f78B4Cb71Ba87fdd7129A8E34730D7",
+  abi: continuPayAbi,
+} as const;
 
 export default function DashboardRecipient() {
+  const router = useRouter();
+  const { address } = useAccount();
+  // const result = useReadContracts({
+  //   contracts: [
+  //     {
+  //       ...lootContract,
+  //       functionName: "getStreamDetails",
+  //       args: [0, "0x0000000000000000000000000000000000000000"],
+  //       // args: [6, "0xEEE615593C7f74d439e4ba91dC813aac9aD25348"],
+  //     },
+  //   ],
+  // });
+  const { data, isLoading, isError } = useReadContracts({
+    contracts: [
+      {
+        ...lootContract,
+        functionName: "getStreamDetails",
+        args: [32, "0xfe419fF91447D505F0047C06E8d31BD43ec65b5e"],
+      },
+    ],
+  });
+  const streamData = data?.[0]?.result;
+
+  console.log("result", data);
+
+  const formatStreamData = (data: any) => {
+    if (!data) return null;
+    const [
+      deposit,
+      ratePerSecond,
+      remainingBalance,
+      startTime,
+      stopTime,
+      recipient,
+      isRecurring,
+      recurringPeriod,
+    ] = data;
+    return {
+      deposit: formatEther(deposit),
+      ratePerSecond: formatUnits(ratePerSecond, 18),
+      remainingBalance: formatEther(remainingBalance),
+      startTime: new Date(Number(startTime) * 1000),
+      stopTime: new Date(Number(stopTime) * 1000),
+      recipient,
+      isRecurring,
+      recurringPeriod: Number(recurringPeriod),
+    };
+  };
+
+  const formattedData = formatStreamData(streamData);
+
   return (
     <div className="theme-custom min-h-screen bg-background text-foreground">
       <div className="flex flex-col md:flex-row">
-        {/* Sidebar */}
         <aside className="w-full md:w-64 bg-card p-4">
           <nav className="space-y-2">
             <Button variant="ghost" className="w-full justify-start">
@@ -44,17 +106,25 @@ export default function DashboardRecipient() {
               <Eye className="mr-2 h-4 w-4" />
               My Streams
             </Button>
-            <Button variant="ghost" className="w-full justify-start">
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              // onClick={run}
+              onClick={() => router.push("/withdraw")}
+            >
               <ArrowDownLeft className="mr-2 h-4 w-4" />
               Withdrawals
             </Button>
-            <Button variant="ghost" className="w-full justify-start">
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => router.push("/faucet")}
+            >
               <Settings className="mr-2 h-4 w-4" />
-              Settings
+              Faucet
             </Button>
           </nav>
         </aside>
-
         {/* Main Content */}
         <main className="flex-1 p-4">
           {/* Metrics Cards */}
@@ -67,7 +137,9 @@ export default function DashboardRecipient() {
                 <ArrowDownLeft className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$10,234</div>
+                <div className="text-2xl font-bold">
+                  {isLoading ? "Loading..." : `${formattedData?.deposit} USDC`}
+                </div>
               </CardContent>
             </Card>
             <Card>
@@ -78,7 +150,7 @@ export default function DashboardRecipient() {
                 <CreditCard className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">8</div>
+                <div className="text-2xl font-bold">1</div>
               </CardContent>
             </Card>
             <Card>
@@ -89,19 +161,26 @@ export default function DashboardRecipient() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$1,567</div>
+                <div className="text-2xl font-bold">
+                  {isLoading
+                    ? "Loading..."
+                    : `${formattedData?.remainingBalance} USDC`}
+                </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Next Expected Payment
+                  Stream End Date
                 </CardTitle>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">$500</div>
-                <p className="text-xs text-muted-foreground">In 2 days</p>
+                <div className="text-2xl font-bold">
+                  {isLoading
+                    ? "Loading..."
+                    : formattedData?.stopTime.toLocaleDateString()}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -113,7 +192,12 @@ export default function DashboardRecipient() {
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col space-y-2">
-                <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Button
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => {
+                    router.push("/withdraw");
+                  }}
+                >
                   <ArrowDownLeft className="mr-2 h-4 w-4" />
                   Withdraw Funds
                 </Button>
@@ -121,9 +205,14 @@ export default function DashboardRecipient() {
                   <Eye className="mr-2 h-4 w-4" />
                   View My Streams
                 </Button>
-                <Button variant="outline">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    router.push("/createstream");
+                  }}
+                >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Request New Stream
+                  Create New Stream
                 </Button>
               </CardContent>
             </Card>
@@ -180,107 +269,47 @@ export default function DashboardRecipient() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Stream Name</TableHead>
-                      <TableHead>Sender</TableHead>
+                      <TableHead>Stream ID</TableHead>
+                      <TableHead>Recipient</TableHead>
                       <TableHead>Token</TableHead>
                       <TableHead>Available to Withdraw</TableHead>
-                      <TableHead>Next Payment Date</TableHead>
-                      <TableHead>Stream End Date</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>Rate Per Second</TableHead>
+                      <TableHead>Start Date</TableHead>
+                      <TableHead>End Date</TableHead>
+                      <TableHead>Is Recurring</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[
-                      {
-                        name: "Salary",
-                        sender: "0x9876...5432",
-                        token: "USDC",
-                        available: "2000",
-                        nextPayment: "2023-07-01",
-                        endDate: "2024-06-30",
-                      },
-                      {
-                        name: "Dividends",
-                        sender: "0x5432...9876",
-                        token: "ETH",
-                        available: "0.5",
-                        nextPayment: "2023-07-15",
-                        endDate: "2023-12-31",
-                      },
-                      {
-                        name: "Royalties",
-                        sender: "0x1357...2468",
-                        token: "DAI",
-                        available: "750",
-                        nextPayment: "2023-07-05",
-                        endDate: "2024-01-31",
-                      },
-                    ].map((stream, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{stream.name}</TableCell>
-                        <TableCell>{stream.sender}</TableCell>
-                        <TableCell>{stream.token}</TableCell>
-                        <TableCell>{stream.available}</TableCell>
-                        <TableCell>{stream.nextPayment}</TableCell>
-                        <TableCell>{stream.endDate}</TableCell>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={8}>Loading...</TableCell>
+                      </TableRow>
+                    ) : formattedData ? (
+                      <TableRow>
+                        <TableCell>0</TableCell>
+                        <TableCell>{formattedData.recipient}</TableCell>
+                        <TableCell>USDC</TableCell>
                         <TableCell>
-                          <Button variant="outline" size="sm">
-                            Withdraw
-                          </Button>
+                          {formattedData.remainingBalance} USDC
+                        </TableCell>
+                        <TableCell>
+                          {formattedData.ratePerSecond} USDC/s
+                        </TableCell>
+                        <TableCell>
+                          {formattedData.startTime.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {formattedData.stopTime.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {formattedData.isRecurring ? "Yes" : "No"}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Withdrawals</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Token</TableHead>
-                      <TableHead>Stream Name</TableHead>
-                      <TableHead>Transaction Hash</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[
-                      {
-                        date: "2023-06-30",
-                        amount: "1000",
-                        token: "USDC",
-                        name: "Salary",
-                        hash: "0xabcd...1234",
-                      },
-                      {
-                        date: "2023-06-25",
-                        amount: "0.2",
-                        token: "ETH",
-                        name: "Dividends",
-                        hash: "0xefgh...5678",
-                      },
-                      {
-                        date: "2023-06-20",
-                        amount: "500",
-                        token: "DAI",
-                        name: "Royalties",
-                        hash: "0xijkl...9012",
-                      },
-                    ].map((withdrawal, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{withdrawal.date}</TableCell>
-                        <TableCell>{withdrawal.amount}</TableCell>
-                        <TableCell>{withdrawal.token}</TableCell>
-                        <TableCell>{withdrawal.name}</TableCell>
-                        <TableCell>{withdrawal.hash}</TableCell>
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={8}>No active streams</TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -290,9 +319,9 @@ export default function DashboardRecipient() {
       </div>
 
       {/* Floating Action Button */}
-      <Button className="fixed bottom-4 right-4 rounded-full px-4 py-2">
+      {/* <Button className="fixed bottom-4 right-4 rounded-full px-4 py-2">
         Withdraw All
-      </Button>
+      </Button> */}
     </div>
   );
 }
