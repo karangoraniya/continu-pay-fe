@@ -27,7 +27,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, storeStreamInDB } from "@/lib/utils";
 import Image from "next/image";
 import { useAccount, useWriteContract } from "wagmi";
 import {
@@ -60,8 +60,9 @@ export default function CreateNewStream() {
   const [isLoading, setIsLoading] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
+  const [streamId, setStreamId] = useState<number | null>(null);
 
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const {
     data: hash,
     error,
@@ -126,6 +127,8 @@ export default function CreateNewStream() {
       );
       setIsLoading(false);
       // Redirect to dashboard after 3 seconds
+      // Store stream data in the database
+      storeStreamData(hash);
       setTimeout(() => {
         router.push("/dashboard");
       }, 3000);
@@ -136,6 +139,55 @@ export default function CreateNewStream() {
       triggerTokenTx();
     }
   }, [hash, router, isApproving]);
+
+  const storeStreamData = async (transactionHash: string) => {
+    try {
+      const streamData = {
+        streamId: Math.floor(Math.random() * 1000000), // Generate a random streamId for now
+        tokenAddress:
+          streamType === "eth"
+            ? "ETH"
+            : token === "USDT"
+            ? USDTAddress
+            : USDCAddress,
+        sender: address,
+        recipient,
+        deposit: amount,
+        startTime: new Date(startDate! * 1000).toISOString(),
+        stopTime: new Date(endDate! * 1000).toISOString(),
+        isRecurring,
+        recurringPeriod: isRecurring ? parseInt(recurrencePeriod) : 0,
+        transactionHash,
+        streamName,
+        description,
+        // Add image handling if needed
+      };
+
+      const response = await fetch("/api/streams", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(streamData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to store stream data");
+      }
+
+      const result = await response.json();
+      setStreamId(result.data.streamId);
+      toast.success("Stream data stored successfully");
+
+      // Redirect to dashboard after 3 seconds
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 3000);
+    } catch (error) {
+      console.error("Error storing stream data:", error);
+      toast.error("Failed to store stream data. Please try again.");
+    }
+  };
 
   const triggerEthTx = async () => {
     try {
