@@ -9,8 +9,6 @@ import toast from "react-hot-toast";
 import { useAccount } from "wagmi";
 
 export default function Component() {
-  // conditional page rendering
-
   const { isConnected } = useAccount();
   const router = useRouter();
   const [isRedirecting, setIsRedirecting] = useState(false);
