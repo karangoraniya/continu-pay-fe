@@ -32,7 +32,7 @@ ContinuPay is a groundbreaking platform that redefines digital payments and fina
 
 Our smart contracts are the backbone of ContinuPay's functionality. You can find the contract code and documentation in our GitHub repository:
 
-[ContinuPay Contracts](https://github.com/your-organization/continupay-contracts)
+[ContinuPay Contracts](https://github.com/karangoraniya/continupay-contract)
 
 ## Getting Started
 
