@@ -1,7 +1,30 @@
+import { createPublicClient, defineChain, http } from "viem";
+
 export const contractAddress = "0xD18230c420f78B4Cb71Ba87fdd7129A8E34730D7";
 export const USDTAddress = "0xEEE615593C7f74d439e4ba91dC813aac9aD25348";
 export const USDCAddress = "0xfe419fF91447D505F0047C06E8d31BD43ec65b5e";
 export const ETHAddress = "0x0000000000000000000000000000000000000000";
+
+const openCampus = defineChain({
+  id: 656476,
+  name: "Open Campus Codex",
+  nativeCurrency: { name: "EDU", symbol: "EDU", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://rpc.open-campus-codex.gelato.digital/"] },
+  },
+  blockExplorers: {
+    default: {
+      name: "BlockScout",
+      url: "https://opencampus-codex.blockscout.com/",
+    },
+  },
+});
+
+export const publicClient = createPublicClient({
+  chain: openCampus,
+  transport: http(),
+});
+
 export const continuPayAbi = [
   {
     inputs: [],
