@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 export interface IStream {
+  address: string;
   streamId: number;
   tokenAddress: string;
   sender: string;
@@ -13,6 +14,7 @@ export interface IStream {
 }
 
 const StreamSchema = new mongoose.Schema<IStream>({
+  address: { type: String, required: true },
   streamId: { type: Number, required: true },
   tokenAddress: { type: String, required: true },
   sender: { type: String, required: true },
