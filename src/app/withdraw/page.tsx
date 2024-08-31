@@ -94,7 +94,7 @@ const WithdrawStream = () => {
 
     try {
       if (tokenType === "eth") {
-        await writeContract({
+        const tx = writeContract({
           abi: continuPayAbi,
           address: contractAddress,
           functionName: "withdrawFromEthStream",
@@ -102,11 +102,11 @@ const WithdrawStream = () => {
         });
       } else {
         const tokenAddress = tokenType === "usdc" ? USDCAddress : USDTAddress;
-        await writeContract({
+        const tx = writeContract({
           abi: continuPayAbi,
           address: contractAddress,
           functionName: "withdrawFromErc20Stream",
-          args: ["0xfe419fF91447D505F0047C06E8d31BD43ec65b5e", 34],
+          args: [tokenAddress, streamId],
         });
       }
     } catch (error) {
